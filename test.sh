@@ -9,6 +9,7 @@ assert() {
     gcc -o tmp tmp.s
     ./tmp
     actual="$?"
+    echo "result: $actual"
 
     if [ "$actual" = "$expected" ]; then
         echo "$input => $actual"
@@ -19,5 +20,8 @@ assert() {
 }
 
 assert 21 "5+20-4"
+assert 42 "(10+ 40)/10 * 8 + 2"
+assert 9 "10-1"
+# assert 2100 "(100+ 100)* 10 + 100"
 
 echo OK
