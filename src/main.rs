@@ -6,15 +6,19 @@ use std::env;
 /*
 Grammer
 
-expr = mul ("+" mul | "-" mul)*
+expr = equality
+equality = relational ("==" relational | "!=" relational)*
+relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
 unary = ('+' | '-')? primary
 primary = num | "(" expr ")"
+
 */
 
 #[derive(Debug, PartialEq)]
 enum NodeKind {
-    Op(char),
+    Op(String),
     Num(usize),
 }
 
@@ -51,17 +55,17 @@ impl Node {
             NodeKind::Op(op) => {
                 println!("    pop rdi");
                 println!("    pop rax");
-                match op {
-                    '+' => {
+                match &*op {
+                    "+" => {
                         println!("    add rax, rdi");
                     },
-                    '-' => {
+                    "-" => {
                         println!("    sub rax, rdi");
                     },
-                    '*' => {
+                    "*" => {
                         println!("    imul rax, rdi");
                     },
-                    '/' => {
+                    "/" => {
                         println!("    cqo");
                         println!("    idiv rdi");
                     }
@@ -69,10 +73,10 @@ impl Node {
                         panic!("compile error");
                     }
                 }
+                println!("    push rax");
+                return;
             }
         }
-
-        println!("    push rax");
     }
 }
 
@@ -84,47 +88,142 @@ struct Input<'a> {
 }
 
 impl<'a> Input<'a> {
-    fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str) -> Self {
         let iter = input.chars().peekable();
         Self {input: iter}
     }
 
-    fn tokenize(&mut self) -> Node {
+    pub fn tokenize(&mut self) -> Node {
         let head_node = self.expr();
         head_node
     }
+
+    fn skip_space(&mut self) {
+        loop {
+            match self.input.peek() {
+                Some(&space) => {
+                    if space == ' ' {
+                        self.input.next();
+                    } else {
+                        break;
+                    }
+                },
+                None => {break;},
+            }
+        }
+    }
     
-    // expr = mul ('+' mul | '-' mul)*
+    // expr = equality
     fn expr(&mut self) -> Node {
         // println!("expr");
+        self.skip_space();
+        self.equality()
+    }
+    
+    // equality = relational ("==" relational | "!=" relational)*
+    fn equality(&mut self) -> Node {
+        // println!("equality");
+        let mut node = self.relational();
+
+        loop {
+            self.skip_space();
+            match self.input.peek() {
+                Some(&c) => {
+                    match c {
+                        '=' => {
+                            self.input.next();
+                            if *self.input.peek().unwrap() == '=' {
+                                self.input.next();
+                                node = Node::new(NodeKind::Op("==".to_string()), Node::link(node), Node::link(self.relational()));
+                            } else {
+                                panic!("invalid operator `=`, expected `==`");
+                            }
+                        },
+                        '!' => {
+                            self.input.next();
+                            if *self.input.peek().unwrap() == '=' {
+                                self.input.next();
+                                node = Node::new(NodeKind::Op("!=".to_string()), Node::link(node), Node::link(self.relational()));
+                            } else {
+                                panic!("invalid operator `!`, expected `!=`");
+                            }
+                        }
+                        _ => {
+                            // panic!("invalid oparator {}, expected `==` or `!=`", c);
+                            return node;
+                        }
+                    }
+                },
+                None => {
+                    return node;
+                }
+            }
+        }
+    }
+    
+    // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+    fn relational(&mut self) -> Node {
+        // println!("relational");
+        let mut node = self.add();
+
+        loop {
+            self.skip_space();
+            match self.input.peek() {
+                Some(&c) => {
+                    match c {
+                        '<' => {
+                            self.input.next();
+                            if *self.input.peek().unwrap() == '=' {
+                                self.input.next();
+                                node = Node::new(NodeKind::Op("<=".to_string()), Node::link(node), Node::link(self.add()));
+                            } else {
+                                node = Node::new(NodeKind::Op("<".to_string()), Node::link(node), Node::link(self.add()));
+                            }
+                        }
+                        '>' => {
+                            self.input.next();
+                            if *self.input.peek().unwrap() == '=' {
+                                self.input.next();
+                                node = Node::new(NodeKind::Op(">=".to_string()), Node::link(node), Node::link(self.add()));
+                            } else {
+                                node = Node::new(NodeKind::Op(">".to_string()), Node::link(node), Node::link(self.add()));
+                            }
+                        }
+                        _ => {
+                            // panic!("invalid operator {}, expected `<` or `>`", c);
+                            return node;
+                        }
+                    }
+                }
+                None => {
+                    return node;
+                }
+            }
+        }
+    }
+    
+    // add = mul ('+' mul | '-' mul)*
+    fn add(&mut self) -> Node {
+        // println!("add");
         let mut node = self.mul();
 
         loop {
+            self.skip_space();
             match self.input.peek() {
                 Some(&c) => {
                     match c {
                         '+' => {
-                            // println!("operator: {}", c);
                             self.input.next();
-                            node = Node::new(NodeKind::Op('+'), Node::link(node), Node::link(self.mul()));
+                            node = Node::new(NodeKind::Op("+".to_string()), Node::link(node), Node::link(self.mul()));
                         },
                         '-' => {
-                            // println!("operator: {}", c);
                             self.input.next();
-                            node = Node::new(NodeKind::Op('-'), Node::link(node), Node::link(self.mul()));
+                            node = Node::new(NodeKind::Op("-".to_string()), Node::link(node), Node::link(self.mul()));
                         },
-
-                        ' ' => {
-                            self.input.next();
-                        },
-
-                        ')' => {
-                            return node;
-                        }
-
                         _ => {
-                            panic!("Invalid Operator: {}", c);
-                        }
+                            // panic!("Invalid Operator: {}, expected `+` or `-`", c);
+                            return node;
+                        },
                     }
                 },
                 None => {
@@ -141,25 +240,19 @@ impl<'a> Input<'a> {
         let mut node = self.unary();
 
         loop {
+            self.skip_space();
             match self.input.peek() {
                 Some(&c) => {
                     match c {
                         '*' => {
-                            // println!("operator: {}", c);
                             self.input.next();
-                            node = Node::new(NodeKind::Op('*'), Node::link(node), Node::link(self.unary()));
+                            node = Node::new(NodeKind::Op("*".to_string()), Node::link(node), Node::link(self.unary()));
                             
                         },
                         '/' => {
-                            // println!("operator: {}", c);
                             self.input.next();
-                            node = Node::new(NodeKind::Op('/'), Node::link(node), Node::link(self.unary()));
+                            node = Node::new(NodeKind::Op("/".to_string()), Node::link(node), Node::link(self.unary()));
                         },
-
-                        ' ' => {
-                            self.input.next();
-                        }
-
                         _ => {
                             return node;
                         }
@@ -174,29 +267,27 @@ impl<'a> Input<'a> {
 
     // unary = ('+' | '-')? primary
     fn unary(&mut self) -> Node {
-        loop {
-            match self.input.peek() {
-                Some(&c) => {
-                    match c {
-                        '+' => {
-                            self.input.next();
-                            return self.primary();
-                        },
-                        '-' => {
-                            self.input.next();
-                            return Node::new(NodeKind::Op('-'), Node::link(Node::new(NodeKind::Num(0), None, None)), Node::link(self.primary()));
-                        },
-                        ' ' => {
-                            self.input.next();
-                        },
-                        _ => {
-                            return self.primary();
-                        }
+        // println!("unary");
+        self.skip_space();
+        match self.input.peek() {
+            Some(&c) => {
+                match c {
+                    '+' => {
+                        self.input.next();
+                        return self.primary();
+                    },
+                    '-' => {
+                        self.input.next();
+                        // returns 0 - primary
+                        return Node::new(NodeKind::Op("-".to_string()), Node::link(Node::new(NodeKind::Num(0), None, None)), Node::link(self.primary()));
+                    },
+                    _ => {
+                        return self.primary();
                     }
-                },
-                None => {
-                    panic!("Expected value: found None");
                 }
+            },
+            None => {
+                panic!("Expected value: found None");
             }
         }
     }
@@ -204,38 +295,34 @@ impl<'a> Input<'a> {
     // primary = num | '(' expr ')'
     fn primary(&mut self) -> Node {
         // println!("primary");
-        loop {
-            match self.input.peek() {
-                Some(&c) => {
-                    match c {
-                        '0'..='9' => {
-                            let num = strtou(&mut self.input);
-                            // println!("digit: {}", num);
-                            let node = Node::new(NodeKind::Num(num), None, None);
-                            return node;
-                        },
-                        '(' => {
+        self.skip_space();
+        match self.input.peek() {
+            Some(&c) => {
+                match c {
+                    '0'..='9' => {
+                        let num = strtou(&mut self.input);
+                        // println!("digit: {}", num);
+                        let node = Node::new(NodeKind::Num(num), None, None);
+                        return node;
+                    },
+                    '(' => {
+                        self.input.next();
+                        let node = self.expr();
+                        self.skip_space();
+                        if *self.input.peek().unwrap() == ')' {
                             self.input.next();
-                            let node = self.expr();
-                            if *self.input.peek().unwrap() == ')' {
-                                self.input.next();
-                            } else {
-                                panic!("')' not found!");
-                            }
-                            return node;
-                        },
-
-                        ' ' => {
-                            self.input.next();
+                        } else {
+                            panic!("')' not found!");
                         }
-                        _ => {
-                            panic!("Invalid value: {}", c);
-                        }
+                        return node;
+                    },
+                    _ => {
+                        panic!("Invalid number: {}", c);
                     }
-                },
-                None => {
-                    panic!("Expected some value!");
                 }
+            },
+            None => {
+                panic!("Expected some value!");
             }
         }
     }
@@ -281,7 +368,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    /*
     #[test]
     fn test_node() {
         let node = test_tokenize("1*(2+3)");
@@ -303,12 +389,44 @@ mod tests {
         print_node(&node);
         println!("-------------");
 
-    }*/
+        let node = test_tokenize("1 == 1");
+        print_node(&node);
+        println!("-------------");
+        
+        let node = test_tokenize("1 != 1");
+        print_node(&node);
+        println!("-------------");
+
+        let node = test_tokenize("1 <= 1");
+        print_node(&node);
+        println!("-------------");
+
+        let node = test_tokenize("1 >= 1");
+        print_node(&node);
+        println!("-------------");
+
+        let node = test_tokenize("1 < 1");
+        print_node(&node);
+        println!("-------------");
+
+        let node = test_tokenize("1 > 1");
+        print_node(&node);
+        println!("-------------");
+
+        let node = test_tokenize("1 == 1 == 1");
+        print_node(&node);
+        println!("-------------");
+
+        let node = test_tokenize("1 > 1 > 1");
+        print_node(&node);
+        println!("-------------");
+    }
     
     #[test]
     fn test_compile() {
         compile("((100 + 100)* 10) + 100");
         compile("-5");
+        compile("123 +  (  + 33 - 99 )* 24");
 
     }
 
