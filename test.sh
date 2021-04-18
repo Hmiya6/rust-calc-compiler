@@ -22,6 +22,8 @@ assert() {
 assert 21 "5+20-4"
 assert 42 "(10+ 40)/10 * 8 + 2"
 assert 9 "10-1"
-# assert 2100 "(100+ 100)* 10 + 100"
+assert 1 "10 > 2"
+assert 0 "43 == 42"
+assert 1 "32 == 43 == 0"
 
 echo OK

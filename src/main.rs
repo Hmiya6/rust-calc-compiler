@@ -68,7 +68,30 @@ impl Node {
                     "/" => {
                         println!("    cqo");
                         println!("    idiv rdi");
-                    }
+                    },
+                    "==" => {
+                        // if rax == rdi, then set 1 to flag register
+                        println!("    cmp rax, rdi");
+                        // load the value of the flag register to al, which is lower 8 bits of rax
+                        println!("    sete al");
+                        // clear upper 56 bits with 0s
+                        println!("    movzb rax, al");
+                    },
+                    "!=" => {
+                        println!("    cmp rax, rdi");
+                        println!("    setne al");
+                        println!("    movzb rax, al");
+                    },
+                    "<" => {
+                        println!("    cmp rax, rdi");
+                        println!("    setl al");
+                        println!("    movzb rax, al");
+                    },
+                    "<=" => {
+                        println!("    cmp rax, rdi");
+                        println!("    setle al");
+                        println!("    movzb rax, al");
+                    },
                     _ => {
                         panic!("compile error");
                     }
@@ -182,11 +205,12 @@ impl<'a> Input<'a> {
                         }
                         '>' => {
                             self.input.next();
+                            // instead of A > B, implement B < A
                             if *self.input.peek().unwrap() == '=' {
                                 self.input.next();
-                                node = Node::new(NodeKind::Op(">=".to_string()), Node::link(node), Node::link(self.add()));
+                                node = Node::new(NodeKind::Op("<=".to_string()), Node::link(self.add()), Node::link(node));
                             } else {
-                                node = Node::new(NodeKind::Op(">".to_string()), Node::link(node), Node::link(self.add()));
+                                node = Node::new(NodeKind::Op("<".to_string()), Node::link(self.add()), Node::link(node));
                             }
                         }
                         _ => {
@@ -427,6 +451,8 @@ mod tests {
         compile("((100 + 100)* 10) + 100");
         compile("-5");
         compile("123 +  (  + 33 - 99 )* 24");
+        compile("123 > 122");
+        compile("42 == 43");
 
     }
 
